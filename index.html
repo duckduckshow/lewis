@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lewis-Bildtrainer</title>
+<style>
+:root{color-scheme:light;--ink:#192b29;--muted:#465e58;--green:#145d4a;--line:#d4e1d9;--paper:#fffdf7}
+*{box-sizing:border-box}body{margin:0;color:var(--ink);background:#eaf1e9;font:16px/1.45 system-ui,sans-serif}main{max-width:980px;margin:auto;padding:clamp(18px,4vw,42px)}header{display:flex;align-items:center;gap:19px;margin-bottom:26px}.logo{display:grid;place-items:center;width:60px;height:60px;border-radius:19px;background:var(--green);color:white;font:bold 20px monospace;flex:none}h1,h2,p{margin:0}h1{font-family:Georgia,serif;font-size:clamp(30px,6vw,49px);line-height:1.05;letter-spacing:-.035em}header p{color:var(--muted);margin-top:7px}nav,.choices,.actions{display:grid;gap:9px}nav{grid-template-columns:repeat(3,1fr);margin-bottom:16px}.choices{grid-template-columns:repeat(3,1fr)}button{font:inherit;font-weight:650;color:inherit;cursor:pointer;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:11px;min-height:46px}button:hover:not(:disabled){border-color:var(--green);background:#edf8ef}button:focus-visible,summary:focus-visible{outline:3px solid #167959;outline-offset:3px}button[aria-pressed=true],button.primary{background:var(--green);color:white;border-color:var(--green)}button.primary:hover:not(:disabled),nav button[aria-pressed=true]:hover{background:#104b3b;color:white}.card{background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:clamp(15px,4vw,30px);box-shadow:0 12px 34px #234a3010}progress{width:100%;height:7px;display:block;accent-color:var(--green);margin-bottom:19px}.meta{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:.88rem;margin-bottom:8px}h2{font-size:clamp(21px,4vw,28px);line-height:1.2}.instruction{margin:8px 0 16px;color:var(--muted)}.diagram{width:100%;display:block;max-height:190px;aspect-ratio:360/200}.board{display:grid;place-items:center;background-color:#f1f6ee;background-image:radial-gradient(#cad9cf 1px,transparent 1px);background-size:15px 15px;border:1px solid var(--line);border-radius:14px;margin:15px 0}.option{text-align:center;background:#f4f7ef;padding:9px}.option .diagram{min-height:65px}.option.correct{border:2px solid #167959;background:#dff5e7}.option.incorrect{border:2px solid #b34a2d;background:#fbe9e1}.option:disabled{cursor:default;opacity:1}.option small{display:block;font-weight:600}.actions{grid-template-columns:1fr 1fr;align-items:center;margin-top:14px}.feedback{min-height:2.9em;margin-top:14px;font-weight:550}.feedback:empty{min-height:0;margin:0}summary{cursor:pointer;font-weight:650}details p{margin-top:8px;color:var(--muted)}footer{margin-top:16px;padding:0 4px;color:var(--muted);font-size:.9rem}[hidden]{display:none!important}@media(max-width:540px){nav button{font-size:.78rem;padding:7px 3px}.choices.words{grid-template-columns:1fr}.option{padding:5px}.logo{width:43px;height:43px;border-radius:13px;font-size:16px}}
+</style>
+</head>
+<body>
+<main>
+<header><div class="logo" aria-hidden="true">·O:</div><div><h1>Lewis-Bildtrainer</h1><p>Atome, Bindungen und Elektronenpaare im Bild erkennen</p></div></header>
+<nav aria-label="Übungslevel">
+<button type="button">1 · Einzelne Atome</button><button type="button">2 · Moleküle</button><button type="button">3 · Verständnis</button>
+</nav>
+<section class="card" aria-labelledby="question">
+<div class="meta"><span id="position"></span><span id="points"></span></div>
+<progress id="progress" aria-label="Fortschritt"></progress>
+<h2 id="question" tabindex="-1"></h2>
+<p id="instruction" class="instruction"></p>
+<div id="board" class="board" hidden></div>
+<div id="choices" class="choices"></div>
+<div id="feedback" class="feedback" role="status"></div>
+<div class="actions"><button type="button" id="reveal">Lösung zeigen</button><button type="button" class="primary" id="next" hidden>Weiter →</button></div>
+</section>
+<footer><details><summary>Merkkasten</summary><p>Ein Punkt steht für ein Valenzelektron. Zwei Punkte nebeneinander stehen für ein Elektronenpaar. Ein Strich zwischen zwei Atomen steht für ein gemeinsames Elektronenpaar. Zwei Striche ergeben eine Doppelbindung. Ein freies Elektronenpaar ist nur einem Atom zugeordnet.</p></details></footer>
+</main>
+<script>
+"use strict";
+const dotOrder=[[0,-1],[1,0],[0,1],[-1,0]];
+const colors={O:"#ad3829",N:"#285792",F:"#236b54",Cl:"#236b54"};
+const atom=(symbol,count)=>{
+  const sides=[0,0,0,0];
+  for(let i=0;i<count;i++) sides[i%4]++;
+  return {atoms:[[symbol,180,100,sides]],bonds:[],label:symbol+" mit "+count+" Valenzelektronen"};
+};
+const molecule=(atoms,bonds)=>{
+  const labels=["keine Bindung","Einfachbindung","Doppelbindung","Dreifachbindung"];
+  const atomText=atoms.map(([symbol,,,sides])=>symbol+" mit "+(sides||[]).filter(n=>n===2).length+" freien Paaren");
+  const bondText=bonds.map(([a,b,order])=>atoms[a][0]+" zu "+atoms[b][0]+": "+labels[order]);
+  return {atoms,bonds,label:[...atomText,...bondText].join(", ")};
+};
+const atomWithDots=(symbol,sides)=>{
+  return {atoms:[[symbol,180,100,sides]],bonds:[],label:symbol+" mit "+sides.join(", ")+" Punkten auf den vier Seiten (oben, rechts, unten, links)"};
+};
+const pair=(a,b,order,pa=[],pb=[])=>molecule([[a,117,100,pa],[b,243,100,pb]],[[0,1,order]]);
+const horizontal=(a,b,c,order,l=[],m=[],r=[])=>molecule([[a,78,100,l],[b,180,100,m],[c,282,100,r]],[[0,1,order],[1,2,order]]);
+const cross=(symbol,count,sides,order=1)=>{
+  const xy=count===2?[[90,140],[270,140]]:count===3?[[82,100],[278,100],[180,174]]:[[82,100],[278,100],[180,26],[180,174]];
+  const atoms=[[symbol,180,count===2?77:100,sides],...xy.map(([x,y])=>["H",x,y])];
+  return molecule(atoms,xy.map((_,i)=>[0,i+1,i===0?order:1]));
+};
+const water=cross("O",2,[2,2]);
+const oxygen=pair("O","O",2,[2,0,2],[2,0,2]);
+const nitrogen=pair("N","N",3,[0,0,0,2],[0,2]);
+const chlorine=pair("H","Cl",1,[],[2,2,2]);
+const carbonDioxide=horizontal("O","C","O",2,[2,0,2],[],[2,0,2]);
+function picture({atoms,bonds,label}){
+  const lines=bonds.flatMap(([a,b,order])=>{
+    const [,x1,y1]=atoms[a], [,x2,y2]=atoms[b];
+    const len=Math.hypot(x2-x1,y2-y1), ux=(x2-x1)/len, uy=(y2-y1)/len;
+    return Array.from({length:order},(_,i)=>{
+      const shift=(i-(order-1)/2)*9;
+      return '<line x1="'+(x1+27*ux-shift*uy)+'" y1="'+(y1+27*uy+shift*ux)+'" x2="'+(x2-27*ux-shift*uy)+'" y2="'+(y2-27*uy+shift*ux)+'" stroke="#223c38" stroke-width="4" stroke-linecap="round"/>';
+    });
+  });
+  const symbols=atoms.flatMap(([symbol,x,y,sides=[]])=>{
+    const dots=sides.flatMap((count,k)=>{
+      const [dx,dy]=dotOrder[k];
+      return Array.from({length:count},(_,i)=>{
+        const offset=(i-(count-1)/2)*12;
+        return '<circle cx="'+(x+36*dx-offset*dy)+'" cy="'+(y+36*dy+offset*dx)+'" r="4.6" fill="#192b29"/>';
+      });
+    });
+    return ['<text x="'+x+'" y="'+y+'" text-anchor="middle" dominant-baseline="central" fill="'+(colors[symbol]||"#192b29")+'" font-family="system-ui,sans-serif" font-size="37" font-weight="750">'+symbol+'</text>',...dots];
+  });
+  return '<svg class="diagram" viewBox="0 0 360 200" role="img" aria-label="'+label+'">'+lines.join("")+symbols.join("")+'</svg>';
+}
+const hydrogenPeroxide=molecule([
+  ["H",55,100],["O",140,100,[2,0,2]],["O",220,100,[2,0,2]],["H",305,100]
+],[[0,1,1],[1,2,1],[2,3,1]]);
+const hydrogenCyanide=molecule([
+  ["H",78,100],["C",180,100],["N",282,100,[0,2]]
+],[[0,1,1],[1,2,3]]);
+const fluoromethane=molecule([
+  ["C",164,100],["H",73,100],["H",164,26],["H",164,174],["F",267,100,[2,2,2]]
+],[[0,1,1],[0,2,1],[0,3,1],[0,4,1]]);
+const atomTasks=[
+  ["H","Wasserstoff",1,2,3],["C","Kohlenstoff",4,3,5],["N","Stickstoff",5,4,6],["O","Sauerstoff",6,5,7],
+  ["Li","Lithium",1,2,4],["Mg","Magnesium",2,1,3],["Al","Aluminium",3,2,4],["Si","Silicium",4,3,6],
+  ["P","Phosphor",5,4,6],["S","Schwefel",6,4,7],["F","Fluor",7,6,8],["Ne","Neon",8,6,7],["Cl","Chlor",7,5,8]
+].map(([symbol,name,count,a,b])=>({
+  title:name+" ("+symbol+")", options:[atom(symbol,count),atom(symbol,a),atom(symbol,b)],
+  explanation:name+" hat "+count+" Valenzelektron"+(count===1?"":"en")+". Jedes Valenzelektron wird als Punkt gezeichnet."
+}));
+atomTasks.push(
+  {
+    title:"Kohlenstoff (C) · Vier Valenzelektronen",
+    instruction:"Welche Zeichnung verteilt die vier Punkte nach der üblichen Lewis-Schreibweise?",
+    options:[[1,1,1,1],[2,0,2,0],[2,1,1,0]].map(sides=>atomWithDots("C",sides)),
+    explanation:"Verteile zuerst je einen Punkt auf die vier Seiten. Erst danach bildest du Paare."
+  },
+  {
+    title:"Stickstoff (N) · Fünf Valenzelektronen",
+    instruction:"Alle Bilder haben fünf Punkte. Welches verteilt sie richtig?",
+    options:[[1,1,1,2],[2,0,1,2],[2,2,0,1]].map(sides=>atomWithDots("N",sides)),
+    explanation:"Vier Elektronen besetzen zuerst die vier Seiten. Das fünfte bildet mit einem davon ein Paar."
+  },
+  {
+    title:"Sauerstoff (O) · Sechs Valenzelektronen",
+    instruction:"Alle Bilder haben sechs Punkte. Welches verteilt sie richtig?",
+    options:[[2,1,1,2],[2,2,2,0],[1,3,1,1]].map(sides=>atomWithDots("O",sides)),
+    explanation:"Bei sechs Valenzelektronen ergeben sich zwei Paare und zwei einzelne Punkte. Welche Seiten die Paare einnehmen, ist frei wählbar."
+  }
+);
+const moleculeTasks=[
+  ["H₂ · Wasserstoff",pair("H","H",1),pair("H","H",2),pair("H","H",1,[],[0,2]),"Die beiden H-Atome teilen ein Elektronenpaar."],
+  ["HCl · Chlorwasserstoff",chlorine,pair("H","Cl",1,[],[2,2]),pair("H","Cl",2,[],[2,2,2]),"H und Cl teilen ein Elektronenpaar. Cl trägt drei freie Elektronenpaare."],
+  ["H₂O · Wasser",water,cross("O",2,[2]),cross("O",2,[2,2],2),"O bildet zwei Einfachbindungen und trägt zwei freie Elektronenpaare."],
+  ["CH₄ · Methan",cross("C",4,[]),cross("C",4,[],2),cross("C",4,[],0),"C bildet zu jedem der vier H-Atome eine Einfachbindung."],
+  ["NH₃ · Ammoniak",cross("N",3,[2]),cross("N",3,[]),cross("N",3,[2],2),"N bildet drei Einfachbindungen und trägt ein freies Elektronenpaar."],
+  ["O₂ · Sauerstoff",oxygen,pair("O","O",1,[2,0,2],[2,0,2]),pair("O","O",2,[2],[2]),"Die O-Atome teilen zwei Elektronenpaare. Jedes O trägt zwei freie Paare."],
+  ["N₂ · Stickstoff",nitrogen,pair("N","N",2,[0,0,0,2],[0,2]),pair("N","N",3),"Die N-Atome teilen drei Elektronenpaare. Jedes N trägt ein freies Paar."],
+  ["F₂ · Fluor",pair("F","F",1,[2,0,2,2],[2,2,2]),pair("F","F",2,[2,0,2,2],[2,2,2]),pair("F","F",1,[2,0,2],[2,0,2]),"Jedes F bildet eine Einfachbindung und trägt drei freie Elektronenpaare."],
+  ["Br₂ · Brom",pair("Br","Br",1,[2,0,2,2],[2,2,2]),pair("Br","Br",1,[2,0,2,2],[2,0,2]),pair("Br","Br",2,[2,0,2],[2,0,2]),"Jedes Br bildet eine Einfachbindung und trägt drei freie Elektronenpaare."],
+  ["H₂S · Schwefelwasserstoff",cross("S",2,[2,2]),cross("S",2,[2]),cross("S",2,[2,2],2),"S bildet zwei Einfachbindungen und trägt wie das O im Wassermolekül zwei freie Paare."],
+  ["CO₂ · Kohlenstoffdioxid",carbonDioxide,horizontal("O","C","O",1,[2,0,2],[],[2,0,2]),horizontal("O","C","O",2),"C bildet zu jedem O eine Doppelbindung. Jedes O trägt zwei freie Paare."],
+  ["CH₃F · Fluormethan",fluoromethane,
+    molecule(fluoromethane.atoms.map((a,i)=>i===4?["F",267,100,[2,2]]:a),fluoromethane.bonds),
+    molecule(fluoromethane.atoms,[[0,1,1],[0,2,1],[0,3,1],[0,4,2]]),
+    "C bildet vier Einfachbindungen. F hat eine Bindung zu C und drei freie Paare."],
+  ["H₂O₂ · Wasserstoffperoxid",hydrogenPeroxide,
+    molecule(hydrogenPeroxide.atoms,[[0,1,1],[1,2,2],[2,3,1]]),
+    molecule(hydrogenPeroxide.atoms.map((a,i)=>i===2?["O",220,100,[2]]:a),hydrogenPeroxide.bonds),
+    "Die beiden O-Atome sind einfach gebunden. Jedes O ist zusätzlich an ein H gebunden und trägt zwei freie Paare."],
+  ["HCN · Cyanwasserstoff",hydrogenCyanide,
+    molecule(hydrogenCyanide.atoms,[[0,1,1],[1,2,2]]),
+    molecule(hydrogenCyanide.atoms,[[0,1,2],[1,2,2]]),
+    "H bildet eine Einfachbindung zu C. C und N teilen drei Paare. Am N bleibt ein freies Paar."],
+  ["C₂H₄ · Ethen",
+    ...[2,1,3].map(order=>molecule([["C",130,100],["C",230,100],["H",63,43],["H",63,157],["H",297,43],["H",297,157]],
+    [[0,1,order],[0,2,1],[0,3,1],[1,4,1],[1,5,1]])),
+    "Jedes C ist an zwei H gebunden. Die beiden C-Atome teilen zwei weitere Elektronenpaare in einer Doppelbindung."]
+].map(([title,correct,a,b,explanation])=>({title,options:[correct,a,b],explanation}));
+const conceptTasks=[
+  ["Was bedeutet der Punkt neben H?",atom("H",1),["Ein Valenzelektron","Ein Elektronenpaar","Eine Bindung"],"Ein Punkt steht für ein einzelnes Valenzelektron, also ein Elektron der Außenschale."],
+  ["Was bedeutet der Strich zwischen den beiden H?",pair("H","H",1),["Ein gemeinsames Elektronenpaar","Ein einzelnes Elektron","Ein freies Elektronenpaar"],"Eine Einfachbindung besteht aus zwei Elektronen, die beide H-Atome gemeinsam nutzen."],
+  ["Was bedeuten die zwei Punkte oben am O?",water,["Ein freies Elektronenpaar","Zwei Bindungen","Zwei zusätzliche Atome"],"Die zwei Punkte bilden ein Elektronenpaar am O. Es ist an keiner Bindung beteiligt."],
+  ["Wie viele freie Elektronenpaare hat das O im Wasser?",water,["Zwei","Eines","Vier"],"Die vier Punkte am O bilden zwei freie Elektronenpaare."],
+  ["Wie viele Elektronen stehen für die beiden Striche zwischen den O-Atomen?",oxygen,["Vier","Zwei","Acht"],"Jeder Strich steht für zwei Elektronen. Die beiden Striche zusammen bilden eine Doppelbindung mit vier Bindungselektronen."],
+  ["Wie viele Elektronenpaare teilen die N-Atome?",nitrogen,["Drei","Zwei","Sechs"],"Drei Striche bedeuten eine Dreifachbindung mit drei gemeinsamen Elektronenpaaren."],
+  ["Wie viele Elektronen sind in dieser Lewis-Formel insgesamt dargestellt?",chlorine,["Acht","Sechs","Sieben"],"Am Cl stehen sechs Punkte. Der Bindungsstrich ergänzt zwei gemeinsame Elektronen. Zusammen sind es acht."],
+  ["Wie viele freie Elektronenpaare sind im ganzen CO₂-Molekül eingezeichnet?",carbonDioxide,["Vier","Zwei","Sechs"],"Jedes der beiden O-Atome hat zwei freie Paare. Am C sind keine Punkte eingezeichnet."],
+  ["Wie viele Valenzelektronen hat das einzelne N-Atom?",atom("N",5),["Fünf","Vier","Drei"],"Zähle alle Punkte, auch die beiden Punkte im Paar. Zusammen sind es fünf."],
+  ["Wie viele Striche gehen vom C aus?",cross("C",4,[]),["Vier","Zwei","Acht"],"Jedes H ist über einen Strich mit C verbunden. Jeder dieser Striche zeigt ein Bindungspaar."],
+  ["Wie viele Bindungselektronenpaare sind insgesamt eingezeichnet?",carbonDioxide,["Vier","Zwei","Acht"],"Jede der zwei Doppelbindungen enthält zwei gemeinsame Paare. Das sind insgesamt vier Paare."],
+  ["Wie viele Elektronen teilen H und C miteinander?",hydrogenCyanide,["Zwei","Vier","Sechs"],"Zwischen H und C steht ein Strich. Zwei Elektronen gehören zu diesem Bindungspaar."],
+  ["Welche Paare gibt es im ganzen HCN-Molekül?",hydrogenCyanide,["Vier Bindungspaare und ein freies Paar","Drei Bindungspaare und zwei freie Paare","Zwei Bindungspaare und ein freies Paar"],"H–C zählt als ein Paar, C≡N als drei Paare. Die zwei Punkte am N bilden ein freies Paar."],
+  ["Wie viele Elektronen zeigt die ganze Zeichnung von H₂O₂?",hydrogenPeroxide,["Vierzehn","Elf","Zehn"],"Drei Striche stehen für sechs Elektronen. Vier freie Paare ergeben acht weitere Elektronen. Zusammen sind es vierzehn."],
+  ["Wie viele Elektronen zählen zur Außenschale von C in CO₂?",carbonDioxide,["Acht","Vier","Sechzehn"],"Jede der beiden Doppelbindungen trägt vier Elektronen zur Außenschale von C bei. Beim Prüfen der Oktettregel zählen alle gemeinsamen Elektronen am C mit."],
+  ["Wie viele Elektronen zählen zur Außenschale des O im Wasser?",water,["Acht","Sechs","Vier"],"Zum O zählen vier Elektronen aus den freien Paaren und vier aus den beiden Bindungen. Damit hat O ein Oktett."]
+].map(([title,diagram,options,explanation])=>({title,diagram,options,explanation}));
+
+// Arrange short recognition questions before tasks that combine several clues.
+const levels=[
+  atomTasks,
+  [0,1,2,3,4,7,8,9,5,6,10,11,12,13,14].map(i=>moleculeTasks[i]),
+  [0,1,2,8,3,9,4,5,7,10,11,6,12,13,14,15].map(i=>conceptTasks[i])
+];
+const difficultyStarts=[[6,13],[6,12],[6,12]];
+const instructions=["Wähle das passende Lewis-Symbol.","Wähle die passende Strukturformel mit Bindungen und freien Elektronenpaaren.","Schau auf die Zeichnung und wähle die passende Antwort."];
+const elements=Object.fromEntries(["position","points","progress","question","instruction","board","choices","feedback","reveal","next"].map(id=>[id,document.getElementById(id)]));
+const {position,points,progress,question,instruction,board,choices,feedback,reveal,next}=elements;
+const tabs=[...document.querySelectorAll("nav button")];
+const states=levels.map(()=>({index:0,score:0,attempts:[]}));
+let level=0;
+const optionLabels=["A","B","C"];
+function render(focus=false){
+  const state=states[level], tasks=levels[level], task=tasks[state.index];
+  tabs.forEach((button,i)=>button.setAttribute("aria-pressed",String(i===level)));
+  const [practice,challenge]=difficultyStarts[level];
+  const difficulty=state.index>=challenge?"Knifflig":state.index>=practice?"Übung":"Einstieg";
+  position.textContent=task?"Aufgabe "+(state.index+1)+" von "+tasks.length+" · "+difficulty:"Level abgeschlossen";
+  points.textContent=state.score+" von "+tasks.length+" richtig";
+  progress.max=tasks.length;
+  progress.value=state.attempts.length;
+  question.textContent=task?task.title:"Runde beendet";
+  instruction.textContent=task?(task.instruction??instructions[level]):"Du hast "+state.score+" von "+tasks.length+" Aufgaben direkt richtig gelöst.";
+  board.hidden=!task?.diagram;
+  board.innerHTML=task?.diagram?picture(task.diagram):"";
+  choices.classList.toggle("words",level===2);
+  choices.replaceChildren();
+  feedback.textContent="";
+  reveal.hidden=!task;
+  next.hidden=Boolean(task);
+  next.textContent=task?"Weiter →":"Level wiederholen";
+  if(task){
+    const order=task.options.map((_,i)=>(i+state.index+level)%3);
+    order.forEach((value,index)=>{
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="option";
+      const entry=task.options[value];
+      if(typeof entry==="string") button.textContent=entry;
+      else button.innerHTML=picture(entry)+"<small>"+optionLabels[index]+"</small>";
+      button.dataset.answer=value;
+      button.addEventListener("click",()=>answer(value));
+      choices.append(button);
+    });
+    const selected=state.attempts[state.index];
+    if(selected!==undefined) showAnswer(selected);
+  }
+  if(focus) question.focus();
+}
+function showAnswer(selected){
+  const state=states[level], task=levels[level][state.index];
+  for(const button of choices.children){
+    const value=Number(button.dataset.answer);
+    button.disabled=true;
+    if(value===0||value===selected){
+      const correct=value===0;
+      button.classList.add(correct?"correct":"incorrect");
+      const mark=document.createElement("small");
+      mark.textContent=correct?"✓ Richtige Lösung":"× Deine Auswahl";
+      button.append(mark);
+    }
+  }
+  feedback.textContent=(selected===0?"Richtig! ":selected===-1?"Lösung. ":"Fast! ")+task.explanation;
+  reveal.hidden=true;
+  next.hidden=false;
+}
+function answer(value){
+  const state=states[level];
+  if(state.attempts.length>state.index) return;
+  state.attempts.push(value);
+  if(value===0) state.score++;
+  points.textContent=state.score+" von "+levels[level].length+" richtig";
+  progress.value=state.attempts.length;
+  showAnswer(value);
+  next.focus();
+}
+tabs.forEach((button,i)=>button.addEventListener("click",()=>{level=i;render(true)}));
+reveal.addEventListener("click",()=>answer(-1));
+next.addEventListener("click",()=>{
+  const state=states[level];
+  if(state.index===levels[level].length) states[level]={index:0,score:0,attempts:[]};
+  else state.index++;
+  render(true);
+});
+render();
+</script>
+</body>
+</html>
