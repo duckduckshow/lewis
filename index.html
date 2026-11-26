@@ -25,7 +25,7 @@
 <div id="feedback" class="feedback" role="status"></div>
 <div class="actions"><button type="button" id="reveal">Lösung zeigen</button><button type="button" class="primary" id="next" hidden>Weiter →</button></div>
 </section>
-<footer><details><summary>Merkkasten</summary><p>Ein Punkt steht für ein Valenzelektron. Zwei Punkte nebeneinander stehen für ein Elektronenpaar. Ein Strich zwischen zwei Atomen steht für ein gemeinsames Elektronenpaar. Zwei Striche ergeben eine Doppelbindung. Ein freies Elektronenpaar ist nur einem Atom zugeordnet.</p></details></footer>
+<footer><details><summary>Merkkasten</summary><p>Ein Punkt steht für ein Valenzelektron. Ein kurzer Strich am Elementsymbol steht für ein freies Elektronenpaar, also zwei Elektronen. Ein Strich zwischen zwei Atomen steht für ein gemeinsames Elektronenpaar. Zwei Striche ergeben eine Doppelbindung. Ein freies Elektronenpaar ist nur einem Atom zugeordnet.</p></details></footer>
 </main>
 <script>
 "use strict";
@@ -43,7 +43,7 @@ const molecule=(atoms,bonds)=>{
   return {atoms,bonds,label:[...atomText,...bondText].join(", ")};
 };
 const atomWithDots=(symbol,sides)=>{
-  return {atoms:[[symbol,180,100,sides]],bonds:[],label:symbol+" mit "+sides.join(", ")+" Punkten auf den vier Seiten (oben, rechts, unten, links)"};
+  return {atoms:[[symbol,180,100,sides]],bonds:[],label:symbol+" mit "+sides.join(", ")+" Elektronen auf den vier Seiten (oben, rechts, unten, links)"};
 };
 const pair=(a,b,order,pa=[],pb=[])=>molecule([[a,117,100,pa],[b,243,100,pb]],[[0,1,order]]);
 const horizontal=(a,b,c,order,l=[],m=[],r=[])=>molecule([[a,78,100,l],[b,180,100,m],[c,282,100,r]],[[0,1,order],[1,2,order]]);
@@ -67,14 +67,15 @@ function picture({atoms,bonds,label}){
     });
   });
   const symbols=atoms.flatMap(([symbol,x,y,sides=[]])=>{
-    const dots=sides.flatMap((count,k)=>{
+    const electronMarks=sides.flatMap((count,k)=>{
       const [dx,dy]=dotOrder[k];
-      return Array.from({length:count},(_,i)=>{
-        const offset=(i-(count-1)/2)*12;
-        return '<circle cx="'+(x+36*dx-offset*dy)+'" cy="'+(y+36*dy+offset*dx)+'" r="4.6" fill="#192b29"/>';
-      });
+      const cx=x+36*dx, cy=y+36*dy;
+      if(count===2){
+        return ['<line x1="'+(cx-9*dy)+'" y1="'+(cy+9*dx)+'" x2="'+(cx+9*dy)+'" y2="'+(cy-9*dx)+'" stroke="#192b29" stroke-width="4" stroke-linecap="round"/>'];
+      }
+      return count===1?['<circle cx="'+cx+'" cy="'+cy+'" r="4.6" fill="#192b29"/>']:[];
     });
-    return ['<text x="'+x+'" y="'+y+'" text-anchor="middle" dominant-baseline="central" fill="'+(colors[symbol]||"#192b29")+'" font-family="system-ui,sans-serif" font-size="37" font-weight="750">'+symbol+'</text>',...dots];
+    return ['<text x="'+x+'" y="'+y+'" text-anchor="middle" dominant-baseline="central" fill="'+(colors[symbol]||"#192b29")+'" font-family="system-ui,sans-serif" font-size="37" font-weight="750">'+symbol+'</text>',...electronMarks];
   });
   return '<svg class="diagram" viewBox="0 0 360 200" role="img" aria-label="'+label+'">'+lines.join("")+symbols.join("")+'</svg>';
 }
@@ -93,25 +94,25 @@ const atomTasks=[
   ["P","Phosphor",5,4,6],["S","Schwefel",6,4,7],["F","Fluor",7,6,8],["Ne","Neon",8,6,7],["Cl","Chlor",7,5,8]
 ].map(([symbol,name,count,a,b])=>({
   title:name+" ("+symbol+")", options:[atom(symbol,count),atom(symbol,a),atom(symbol,b)],
-  explanation:name+" hat "+count+" Valenzelektron"+(count===1?"":"en")+". Jedes Valenzelektron wird als Punkt gezeichnet."
+  explanation:name+" hat "+count+" Valenzelektron"+(count===1?"":"en")+". Einzelne Elektronen sind Punkte. Ein kurzer Strich steht für zwei Elektronen."
 }));
 atomTasks.push(
   {
     title:"Kohlenstoff (C) · Vier Valenzelektronen",
-    instruction:"Welche Zeichnung verteilt die vier Punkte nach der üblichen Lewis-Schreibweise?",
+    instruction:"Welche Zeichnung verteilt die vier Elektronen nach der üblichen Lewis-Schreibweise?",
     options:[[1,1,1,1],[2,0,2,0],[2,1,1,0]].map(sides=>atomWithDots("C",sides)),
     explanation:"Verteile zuerst je einen Punkt auf die vier Seiten. Erst danach bildest du Paare."
   },
   {
     title:"Stickstoff (N) · Fünf Valenzelektronen",
-    instruction:"Alle Bilder haben fünf Punkte. Welches verteilt sie richtig?",
+    instruction:"Alle Bilder zeigen fünf Elektronen. Welches verteilt sie richtig?",
     options:[[1,1,1,2],[2,0,1,2],[2,2,0,1]].map(sides=>atomWithDots("N",sides)),
     explanation:"Vier Elektronen besetzen zuerst die vier Seiten. Das fünfte bildet mit einem davon ein Paar."
   },
   {
     title:"Sauerstoff (O) · Sechs Valenzelektronen",
-    instruction:"Alle Bilder haben sechs Punkte. Welches verteilt sie richtig?",
-    options:[[2,1,1,2],[2,2,2,0],[1,3,1,1]].map(sides=>atomWithDots("O",sides)),
+    instruction:"Welches Bild zeigt sechs richtig verteilte Elektronen?",
+    options:[[2,1,1,2],[2,2,2,0],[2,1,1,1]].map(sides=>atomWithDots("O",sides)),
     explanation:"Bei sechs Valenzelektronen ergeben sich zwei Paare und zwei einzelne Punkte. Welche Seiten die Paare einnehmen, ist frei wählbar."
   }
 );
@@ -147,18 +148,18 @@ const moleculeTasks=[
 const conceptTasks=[
   ["Was bedeutet der Punkt neben H?",atom("H",1),["Ein Valenzelektron","Ein Elektronenpaar","Eine Bindung"],"Ein Punkt steht für ein einzelnes Valenzelektron, also ein Elektron der Außenschale."],
   ["Was bedeutet der Strich zwischen den beiden H?",pair("H","H",1),["Ein gemeinsames Elektronenpaar","Ein einzelnes Elektron","Ein freies Elektronenpaar"],"Eine Einfachbindung besteht aus zwei Elektronen, die beide H-Atome gemeinsam nutzen."],
-  ["Was bedeuten die zwei Punkte oben am O?",water,["Ein freies Elektronenpaar","Zwei Bindungen","Zwei zusätzliche Atome"],"Die zwei Punkte bilden ein Elektronenpaar am O. Es ist an keiner Bindung beteiligt."],
-  ["Wie viele freie Elektronenpaare hat das O im Wasser?",water,["Zwei","Eines","Vier"],"Die vier Punkte am O bilden zwei freie Elektronenpaare."],
+  ["Was bedeutet der kurze Strich über dem O?",water,["Ein freies Elektronenpaar","Zwei Bindungen","Zwei zusätzliche Atome"],"Der kurze Strich über dem O zeigt ein freies Elektronenpaar. Es ist an keiner Bindung beteiligt."],
+  ["Wie viele freie Elektronenpaare hat das O im Wasser?",water,["Zwei","Eines","Vier"],"Die zwei kurzen Striche oben und rechts am O zeigen je ein freies Elektronenpaar."],
   ["Wie viele Elektronen stehen für die beiden Striche zwischen den O-Atomen?",oxygen,["Vier","Zwei","Acht"],"Jeder Strich steht für zwei Elektronen. Die beiden Striche zusammen bilden eine Doppelbindung mit vier Bindungselektronen."],
   ["Wie viele Elektronenpaare teilen die N-Atome?",nitrogen,["Drei","Zwei","Sechs"],"Drei Striche bedeuten eine Dreifachbindung mit drei gemeinsamen Elektronenpaaren."],
-  ["Wie viele Elektronen sind in dieser Lewis-Formel insgesamt dargestellt?",chlorine,["Acht","Sechs","Sieben"],"Am Cl stehen sechs Punkte. Der Bindungsstrich ergänzt zwei gemeinsame Elektronen. Zusammen sind es acht."],
-  ["Wie viele freie Elektronenpaare sind im ganzen CO₂-Molekül eingezeichnet?",carbonDioxide,["Vier","Zwei","Sechs"],"Jedes der beiden O-Atome hat zwei freie Paare. Am C sind keine Punkte eingezeichnet."],
-  ["Wie viele Valenzelektronen hat das einzelne N-Atom?",atom("N",5),["Fünf","Vier","Drei"],"Zähle alle Punkte, auch die beiden Punkte im Paar. Zusammen sind es fünf."],
+  ["Wie viele Elektronen sind in dieser Lewis-Formel insgesamt dargestellt?",chlorine,["Acht","Sechs","Sieben"],"Drei kurze Striche am Cl stehen für sechs Elektronen. Die Bindung zwischen H und Cl enthält zwei weitere Elektronen. Zusammen sind es acht."],
+  ["Wie viele freie Elektronenpaare sind im ganzen CO₂-Molekül eingezeichnet?",carbonDioxide,["Vier","Zwei","Sechs"],"Jedes der beiden O-Atome hat zwei freie Paare. Am C gibt es keine freien Paare."],
+  ["Wie viele Valenzelektronen hat das einzelne N-Atom?",atom("N",5),["Fünf","Vier","Drei"],"Drei Punkte stehen für drei einzelne Elektronen. Der kurze Strich steht für zwei weitere. Zusammen sind es fünf."],
   ["Wie viele Striche gehen vom C aus?",cross("C",4,[]),["Vier","Zwei","Acht"],"Jedes H ist über einen Strich mit C verbunden. Jeder dieser Striche zeigt ein Bindungspaar."],
   ["Wie viele Bindungselektronenpaare sind insgesamt eingezeichnet?",carbonDioxide,["Vier","Zwei","Acht"],"Jede der zwei Doppelbindungen enthält zwei gemeinsame Paare. Das sind insgesamt vier Paare."],
   ["Wie viele Elektronen teilen H und C miteinander?",hydrogenCyanide,["Zwei","Vier","Sechs"],"Zwischen H und C steht ein Strich. Zwei Elektronen gehören zu diesem Bindungspaar."],
-  ["Welche Paare gibt es im ganzen HCN-Molekül?",hydrogenCyanide,["Vier Bindungspaare und ein freies Paar","Drei Bindungspaare und zwei freie Paare","Zwei Bindungspaare und ein freies Paar"],"H–C zählt als ein Paar, C≡N als drei Paare. Die zwei Punkte am N bilden ein freies Paar."],
-  ["Wie viele Elektronen zeigt die ganze Zeichnung von H₂O₂?",hydrogenPeroxide,["Vierzehn","Elf","Zehn"],"Drei Striche stehen für sechs Elektronen. Vier freie Paare ergeben acht weitere Elektronen. Zusammen sind es vierzehn."],
+  ["Welche Paare gibt es im ganzen HCN-Molekül?",hydrogenCyanide,["Vier Bindungspaare und ein freies Paar","Drei Bindungspaare und zwei freie Paare","Zwei Bindungspaare und ein freies Paar"],"H–C zählt als ein Paar, C≡N als drei Paare. Der kurze Strich außen am N zeigt ein freies Paar."],
+  ["Wie viele Elektronen zeigt die ganze Zeichnung von H₂O₂?",hydrogenPeroxide,["Vierzehn","Elf","Zehn"],"Drei Striche zwischen den Atomen stehen für sechs Bindungselektronen. Vier freie Paare ergeben acht weitere Elektronen. Zusammen sind es vierzehn."],
   ["Wie viele Elektronen zählen zur Außenschale von C in CO₂?",carbonDioxide,["Acht","Vier","Sechzehn"],"Jede der beiden Doppelbindungen trägt vier Elektronen zur Außenschale von C bei. Beim Prüfen der Oktettregel zählen alle gemeinsamen Elektronen am C mit."],
   ["Wie viele Elektronen zählen zur Außenschale des O im Wasser?",water,["Acht","Sechs","Vier"],"Zum O zählen vier Elektronen aus den freien Paaren und vier aus den beiden Bindungen. Damit hat O ein Oktett."]
 ].map(([title,diagram,options,explanation])=>({title,diagram,options,explanation}));
